@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Liveness Detection Monitor</title>
+    <style>
+        body { font-family: monospace; background: #1e1e1e; color: #00ff00; padding: 20px; }
+        h1 { color: #fff; }
+        #log { border: 1px solid #333; padding: 10px; height: 80vh; overflow-y: scroll; background: #000; }
+        .entry { margin-bottom: 10px; border-bottom: 1px dashed #333; padding-bottom: 5px; }
+        .success { color: #00ff00; }
+        .fail { color: #ff0000; }
+        .json { color: #aaa; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <h1>Liveness Detection Stream (ws://localhost:8000/ws)</h1>
+    <div id="log">Connecting...</div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        const ws = new WebSocket('ws://localhost:8000/ws');
+
+        ws.onopen = function() {
+            logDiv.innerHTML += '<div class="entry"><b>[System] Connected to WebSocket</b></div>';
+        };
+
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            const verdictClass = data.verdict === 'REAL' ? 'success' : 'fail';
+            
+            const html = `
+                <div class="entry">
+                    <div><b>File:</b> ${data.chunk_path.split('/').pop()}</div>
+                    <div class="${verdictClass}"><b>Verdict:</b> ${data.verdict}</div>
+                    ${data.reasons.length > 0 ? `<div class="fail"><b>Reasons:</b> ${data.reasons.join(', ')}</div>` : ''}
+                    <pre class="json">${JSON.stringify(data.details, null, 2)}</pre>
+                </div>
+            `;
+            
+            logDiv.innerHTML = html + logDiv.innerHTML;
+        };
+
+        ws.onclose = function() {
+            logDiv.innerHTML = '<div class="entry fail"><b>[System] Disconnected</b></div>' + logDiv.innerHTML;
+        };
+        
+        ws.onerror = function(err) {
+             console.error(err);
+             logDiv.innerHTML = '<div class="entry fail"><b>[System] Error - Check Console</b></div>' + logDiv.innerHTML;
+        }
+    </script>
+</body>
+</html>
