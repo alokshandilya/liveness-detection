@@ -147,7 +147,17 @@ async def process_buffers():
             # print("   (No video data in this interval, skipping chunk)")
             continue
 
-        print(f"📦 Processing chunk {chunk_counter}: {len(current_video)} video packets, {len(current_audio)} audio packets")
+        # --- DYNAMIC FPS CALCULATION ---
+        # If Recall sends sparse frames (e.g. 70 frames in 10s -> 7fps),
+        # FFmpeg default 25fps interprets 70 frames as 2.8s video.
+        # We calculate the effective FPS to tell FFmpeg how to stretch the input.
+        num_packets = len(current_video)
+        input_fps = max(num_packets / CHUNK_DURATION, 1.0) # Ensure at least 1.0
+        
+        # Round to 2 decimals for cleaner logs/cmd
+        input_fps = round(input_fps, 2)
+
+        print(f"📦 Processing chunk {chunk_counter}: {num_packets} frames ({input_fps} fps), {len(current_audio)} audio samples")
 
         # 2. Create unique temporary filenames
         timestamp = int(time.time() * 1000)
@@ -183,6 +193,7 @@ async def process_buffers():
                 FFMPEG_CMD, "-y",
                 
                 # Input Video
+                "-r", str(input_fps), # Interpret input at calculated FPS to fill 10s
                 "-f", "h264", 
                 "-i", temp_video_path,
                 
@@ -190,9 +201,12 @@ async def process_buffers():
                 *(["-f", "s16le", "-ar", "44100", "-ac", "1", "-i", temp_audio_path] if has_audio else []),
                 
                 # Output Video Options
-                "-c:v", "copy",       # Copy stream (fastest, preserves quality)
-                                      # If 'copy' fails due to timestamp gaps, we might switch to 'libx264' later.
-                                      # But 'copy' with header injection usually works.
+                # We RE-ENCODE to Libx264 to normalize to 30fps output
+                # This duplicates frames if input_fps < 30, ensuring valid 10s video.
+                "-c:v", "libx264",
+                "-r", "30",           # Output Framerate
+                "-preset", "ultrafast",
+                "-pix_fmt", "yuv420p", # Ensure compatible pixel format
                 
                 # Output Audio Options
                 *(["-c:a", "aac", "-b:a", "128k"] if has_audio else []),
