@@ -148,16 +148,26 @@ async def process_buffers():
             continue
 
         # --- DYNAMIC FPS CALCULATION ---
-        # If Recall sends sparse frames (e.g. 70 frames in 10s -> 7fps),
-        # FFmpeg default 25fps interprets 70 frames as 2.8s video.
-        # We calculate the effective FPS to tell FFmpeg how to stretch the input.
-        num_packets = len(current_video)
-        input_fps = max(num_packets / CHUNK_DURATION, 1.0) # Ensure at least 1.0
+        # To ensure Lip Sync, we must calculate the FPS based on the ACTUAL time elapsed
+        # between the first and last packet, not just the arbitrary chunk duration.
+        # This prevents "fast motion" (Chipmunk video) if network was slow/laggy.
         
-        # Round to 2 decimals for cleaner logs/cmd
+        num_packets = len(current_video)
+        input_fps = 30.0 # Default fallback
+        
+        if num_packets > 1:
+            t_start = current_video[0]['time']
+            t_end = current_video[-1]['time']
+            duration = t_end - t_start
+            
+            if duration > 0.1: # Avoid division by zero or tiny durations
+                input_fps = num_packets / duration
+        
+        # Clamp FPS to reasonable bounds (e.g. 1.0 to 60.0) to prevent FFmpeg errors
+        input_fps = max(min(input_fps, 60.0), 1.0)
         input_fps = round(input_fps, 2)
 
-        print(f"📦 Processing chunk {chunk_counter}: {num_packets} frames ({input_fps} fps), {len(current_audio)} audio samples")
+        print(f"📦 Processing chunk {chunk_counter}: {num_packets} frames over {duration if num_packets > 1 else 0:.2f}s ({input_fps} fps)")
 
         # 2. Create unique temporary filenames
         timestamp = int(time.time() * 1000)
@@ -193,12 +203,12 @@ async def process_buffers():
                 FFMPEG_CMD, "-y",
                 
                 # Input Video
-                "-r", str(input_fps), # Interpret input at calculated FPS to fill 10s
+                "-r", str(input_fps), # Interpret input at actual captured FPS to preserve speed
                 "-f", "h264", 
                 "-i", temp_video_path,
                 
                 # Input Audio (if available)
-                *(["-f", "s16le", "-ar", "44100", "-ac", "1", "-i", temp_audio_path] if has_audio else []),
+                *(["-f", "s16le", "-ar", "16000", "-ac", "1", "-i", temp_audio_path] if has_audio else []),
                 
                 # Output Video Options
                 # We RE-ENCODE to Libx264 to normalize to 30fps output
