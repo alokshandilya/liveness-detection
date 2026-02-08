@@ -1,16 +1,16 @@
 import asyncio
 import os
-import shutil
 import time
 import json
 import base64
+import subprocess
+import shutil
 from typing import List, Dict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.websockets import WebSocketState
 import uvicorn
 
-# Configuration
+# --- Configuration ---
 CHUNK_DIR = os.path.join(os.getcwd(), "chunks")
 CHUNK_DURATION = 10.0  # Seconds
 FFMPEG_CMD = "ffmpeg"  # Ensure ffmpeg is in your PATH
@@ -25,110 +25,97 @@ app = FastAPI()
 video_buffer: List[Dict] = []
 audio_buffer: List[Dict] = []
 
+# Store the critical H.264 Stream Header (SPS/PPS)
+# We will prepend this to every chunk to ensure FFmpeg can decode it.
+video_header: bytes = None
+
 # Locks to ensure thread-safe access to buffers
 buffer_lock = asyncio.Lock()
 
-def process_recall_message(message_text: str, buffer_list: list, prefix: str):
-    """
-    Parses a JSON message from Recall.ai, extracts the base64 payload,
-    decodes it, and appends it to the buffer.
-    """
+def extract_payload(message_text):
+    """Robustly extracts base64 payload from JSON message."""
     try:
         data = json.loads(message_text)
-        
-        # We need to robustly find the payload. 
-        # Recall separate streams can be deeply nested:
-        # data -> data -> buffer (Base64)
-        # Or sometimes top level: data -> Base64
-        # Or payload -> Base64
-        
-        payload = None
-        
-        # 1. Try deep nest (from user snippets/docs for separate streams)
+        # 1. Try deep nested
         try:
-            payload = data["data"]["data"]["buffer"]
+            return base64.b64decode(data["data"]["data"]["buffer"])
         except (KeyError, TypeError):
             pass
-
-        # 2. Try top-level 'data' key with base64 string (common fallback)
-        if not payload and "data" in data and isinstance(data["data"], str):
-            payload = data["data"]
-            
-        # 3. Try 'payload' key (another common pattern)
-        if not payload and "payload" in data and isinstance(data["payload"], str):
-            payload = data["payload"]
-        
-        if payload:
-            decoded_bytes = base64.b64decode(payload)
-            if decoded_bytes:
-                buffer_list.append({"data": decoded_bytes, "time": time.time()})
-                # print(f"[{prefix}] Decoded {len(decoded_bytes)} bytes")
-            else:
-                print(f"[{prefix}] Warning: Empty decoded payload")
-    except json.JSONDecodeError:
+        # 2. Try top-level 'data'
+        if "data" in data and isinstance(data["data"], str):
+            return base64.b64decode(data["data"])
+        # 3. Try 'payload'
+        if "payload" in data and isinstance(data["payload"], str):
+            return base64.b64decode(data["payload"])
+    except Exception:
         pass
-    except Exception as e:
-        # Don't spam logs if it's just a non-media event
-        pass
-        # print(f"[{prefix}] Error processing text frame: {e}")
+    return None
 
 @app.websocket("/recall-video-endpoint")
 async def video_endpoint(websocket: WebSocket):
+    global video_header
     await websocket.accept()
-    print("Video stream connected")
+    print("📹 Video stream connected")
+    
+    packet_count = 0
     try:
         while True:
-            if websocket.client_state == WebSocketState.DISCONNECTED:
-                break
-            
             message = await websocket.receive()
+            payload = None
 
-            # Case 1: Binary Frame (Raw bytes)
-            if "bytes" in message and message["bytes"]:
-                async with buffer_lock:
-                    video_buffer.append({"data": message["bytes"], "time": time.time()})
-            
-            # Case 2: Text Frame (JSON with Base64)
+            if "bytes" in message:
+                payload = message["bytes"]
             elif "text" in message:
+                payload = extract_payload(message["text"])
+            
+            if payload:
+                # Save the first packet as the header (SPS/PPS usually)
+                if video_header is None:
+                    print(f"🔑 Captured Video Header ({len(payload)} bytes)")
+                    video_header = payload
+                
                 async with buffer_lock:
-                    process_recall_message(message["text"], video_buffer, "Video")
+                    video_buffer.append({"data": payload, "time": time.time()})
+                
+                packet_count += 1
+                if packet_count % 30 == 0:
+                    pass 
+                    # print(f"   [Video] Buffered 30 packets")
 
     except WebSocketDisconnect:
-        print("Video stream disconnected cleanly")
-    except RuntimeError as e:
-        if "disconnect message has been received" not in str(e):
-             print(f"Video stream runtime error: {e}")
+        print("📹 Video stream disconnected")
     except Exception as e:
-        print(f"Video stream error: {e}")
+        print(f"❌ Video Error: {e}")
 
 @app.websocket("/recall-audio-endpoint")
 async def audio_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("Audio stream connected")
+    print("🎙️ Audio stream connected")
+    
+    packet_count = 0
     try:
         while True:
-            if websocket.client_state == WebSocketState.DISCONNECTED:
-                break
-
             message = await websocket.receive()
+            payload = None
 
-            # Case 1: Binary Frame (Raw bytes)
-            if "bytes" in message and message["bytes"]:
-                async with buffer_lock:
-                    audio_buffer.append({"data": message["bytes"], "time": time.time()})
-            
-            # Case 2: Text Frame (JSON with Base64)
+            if "bytes" in message:
+                payload = message["bytes"]
             elif "text" in message:
+                payload = extract_payload(message["text"])
+            
+            if payload:
                 async with buffer_lock:
-                    process_recall_message(message["text"], audio_buffer, "Audio")
+                    audio_buffer.append({"data": payload, "time": time.time()})
+                
+                packet_count += 1
+                if packet_count % 50 == 0:
+                    pass
+                    # print(f"   [Audio] Buffered 50 packets")
                 
     except WebSocketDisconnect:
-        print("Audio stream disconnected cleanly")
-    except RuntimeError as e:
-        if "disconnect message has been received" not in str(e):
-             print(f"Audio stream runtime error: {e}")
+        print("🎙️ Audio stream disconnected")
     except Exception as e:
-        print(f"Audio stream error: {e}")
+        print(f"❌ Audio Error: {e}")
 
 async def process_buffers():
     """
@@ -136,17 +123,9 @@ async def process_buffers():
     into an MP4 file using FFmpeg, then moves it to the chunks directory.
     """
     chunk_counter = 0
-    consecutive_chunks = 0
+    print(f"⏱️  Background Processor Started (Every {CHUNK_DURATION}s)")
     
     while True:
-        if consecutive_chunks >= 10:
-            print("Pausing for 10 seconds after 10 chunks...")
-            await asyncio.sleep(10)
-            async with buffer_lock:
-                video_buffer.clear()
-                audio_buffer.clear()
-            consecutive_chunks = 0
-
         await asyncio.sleep(CHUNK_DURATION)
         
         # 1. Extract current data from buffers safely
@@ -165,9 +144,10 @@ async def process_buffers():
         
         # If we have no video, we skip (SyncNet requires video)
         if not current_video:
+            # print("   (No video data in this interval, skipping chunk)")
             continue
 
-        print(f"Processing chunk {chunk_counter}: {len(current_video)} video packets, {len(current_audio)} audio packets")
+        print(f"📦 Processing chunk {chunk_counter}: {len(current_video)} video packets, {len(current_audio)} audio packets")
 
         # 2. Create unique temporary filenames
         timestamp = int(time.time() * 1000)
@@ -182,6 +162,11 @@ async def process_buffers():
         try:
             # 3. Write raw data to temp files
             with open(temp_video_path, "wb") as f:
+                # INJECT HEADER: Ensure every chunk starts with SPS/PPS
+                if video_header:
+                    f.write(video_header)
+                
+                # Write the actual frames for this chunk
                 for packet in current_video:
                     f.write(packet["data"])
             
@@ -193,24 +178,31 @@ async def process_buffers():
                         f.write(packet["data"])
 
             # 4. Mux using FFmpeg
-            cmd = [FFMPEG_CMD, "-y"]
-            
-            # Input Video
-            cmd.extend(["-f", "h264", "-i", temp_video_path])
-            
-            # Input Audio (if available)
-            if has_audio:
-                # Assuming PCM S16LE, 16000 Hz, Mono based on standard Recall output
-                cmd.extend(["-f", "s16le", "-ar", "16000", "-ac", "1", "-i", temp_audio_path])
-            
-            # Output Options
-            cmd.extend(["-c:v", "copy"]) # Copy video stream (fast, no re-encode)
-            
-            if has_audio:
-                cmd.extend(["-c:a", "aac"])  # Encode audio to AAC
-            
-            cmd.extend(["-movflags", "faststart"]) # Optimize for web playback
-            cmd.append(temp_output_path)
+            # We map inputs and force output to a clean MP4
+            cmd = [
+                FFMPEG_CMD, "-y",
+                
+                # Input Video
+                "-f", "h264", 
+                "-i", temp_video_path,
+                
+                # Input Audio (if available)
+                *(["-f", "s16le", "-ar", "44100", "-ac", "1", "-i", temp_audio_path] if has_audio else []),
+                
+                # Output Video Options
+                "-c:v", "copy",       # Copy stream (fastest, preserves quality)
+                                      # If 'copy' fails due to timestamp gaps, we might switch to 'libx264' later.
+                                      # But 'copy' with header injection usually works.
+                
+                # Output Audio Options
+                *(["-c:a", "aac", "-b:a", "128k"] if has_audio else []),
+                
+                # Optimization
+                "-movflags", "+faststart",
+                
+                # Output Path
+                temp_output_path
+            ]
             
             # Run FFmpeg
             with open(ffmpeg_log_path, "w") as log_file:
@@ -223,24 +215,19 @@ async def process_buffers():
             
             if process.returncode == 0:
                 shutil.move(temp_output_path, final_output_path)
-                print(f"Created chunk: {output_filename}")
-                consecutive_chunks += 1
+                print(f"✅ Created chunk: {output_filename}")
                 
-                # Cleanup log on success
-                if os.path.exists(ffmpeg_log_path):
-                    os.remove(ffmpeg_log_path)
-                
-                # Cleanup temps on success
-                if os.path.exists(temp_video_path):
-                    os.remove(temp_video_path)
-                if os.path.exists(temp_audio_path):
-                    os.remove(temp_audio_path)
+                # Cleanup logs/temps on success
+                for p in [ffmpeg_log_path, temp_video_path, temp_audio_path]:
+                    if os.path.exists(p):
+                        os.remove(p)
             else:
-                print(f"FFmpeg failed to create chunk {chunk_counter} (Return code: {process.returncode})")
-                print(f"See log at: {ffmpeg_log_path}")
+                print(f"❌ FFmpeg failed to create chunk {chunk_counter} (Return code: {process.returncode})")
+                print(f"   See log at: {ffmpeg_log_path}")
+                # Keep temp files for debugging
 
         except Exception as e:
-            print(f"Error processing chunk {chunk_counter}: {e}")
+            print(f"❌ Error processing chunk {chunk_counter}: {e}")
         
         finally:
             chunk_counter += 1
@@ -251,7 +238,6 @@ async def startup_event():
     asyncio.create_task(process_buffers())
 
 if __name__ == "__main__":
-    # Run on port 5000 as requested
     print(f"Starting Bridge Server on port 5000...")
-    print(f"Writing chunks to: {CHUNK_DIR}")
+    print(f"Chunks will be written to: {CHUNK_DIR}")
     uvicorn.run(app, host="0.0.0.0", port=5000)
