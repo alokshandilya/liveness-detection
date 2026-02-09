@@ -149,13 +149,13 @@ async def process_buffers():
             continue
 
         # --- VALIDATION 1: Duration Check ---
-        # If the chunk represents < 15s of time, discard it (start/end partials).
+        # If the chunk represents < 10s of time, discard it (start/end partials).
         t_start = current_video[0]['time']
         t_end = current_video[-1]['time']
         duration = t_end - t_start
         
-        if duration < 15.0:
-            print(f"⚠️  Skipping Chunk {chunk_counter}: Duration too short ({duration:.2f}s < 15s)", flush=True)
+        if duration < 10.0:
+            print(f"⚠️  Skipping Chunk {chunk_counter}: Duration too short ({duration:.2f}s < 10s)", flush=True)
             continue
 
         # --- DYNAMIC FPS CALCULATION ---
