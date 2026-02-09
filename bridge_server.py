@@ -12,7 +12,7 @@ import uvicorn
 
 # --- Configuration ---
 CHUNK_DIR = os.path.join(os.getcwd(), "chunks")
-CHUNK_DURATION = 10.0  # Seconds
+CHUNK_DURATION = 20.0  # Seconds
 FFMPEG_CMD = "ffmpeg"  # Ensure ffmpeg is in your PATH
 
 # Ensure the chunks directory exists
@@ -80,7 +80,6 @@ async def video_endpoint(websocket: WebSocket):
                 packet_count += 1
                 if packet_count % 30 == 0:
                     pass 
-                    # print(f"   [Video] Buffered 30 packets")
 
     except WebSocketDisconnect:
         print("📹 Video stream disconnected")
@@ -110,7 +109,6 @@ async def audio_endpoint(websocket: WebSocket):
                 packet_count += 1
                 if packet_count % 50 == 0:
                     pass
-                    # print(f"   [Audio] Buffered 50 packets")
                 
     except WebSocketDisconnect:
         print("🎙️ Audio stream disconnected")
@@ -144,49 +142,50 @@ async def process_buffers():
         
         # If we have no video, we skip (SyncNet requires video)
         if not current_video:
-            # print("   (No video data in this interval, skipping chunk)")
+            continue
+
+        # --- VALIDATION 1: Duration Check ---
+        # If the chunk represents < 15s of time, discard it (start/end partials).
+        t_start = current_video[0]['time']
+        t_end = current_video[-1]['time']
+        duration = t_end - t_start
+        
+        if duration < 15.0:
+            print(f"⚠️  Skipping Chunk {chunk_counter}: Duration too short ({duration:.2f}s < 15s)")
             continue
 
         # --- DYNAMIC FPS CALCULATION ---
-        # To ensure Lip Sync, we must calculate the FPS based on the ACTUAL time elapsed
-        # between the first and last packet, not just the arbitrary chunk duration.
-        # This prevents "fast motion" (Chipmunk video) if network was slow/laggy.
-        
         num_packets = len(current_video)
-        input_fps = 30.0 # Default fallback
+        input_fps = 30.0 
         
-        if num_packets > 1:
-            t_start = current_video[0]['time']
-            t_end = current_video[-1]['time']
-            duration = t_end - t_start
-            
-            if duration > 0.1: # Avoid division by zero or tiny durations
-                input_fps = num_packets / duration
+        if duration > 0.1:
+            input_fps = num_packets / duration
         
-        # Clamp FPS to reasonable bounds (e.g. 1.0 to 60.0) to prevent FFmpeg errors
         input_fps = max(min(input_fps, 60.0), 1.0)
         input_fps = round(input_fps, 2)
 
-        print(f"📦 Processing chunk {chunk_counter}: {num_packets} frames over {duration if num_packets > 1 else 0:.2f}s ({input_fps} fps)")
+        print(f"📦 Processing chunk {chunk_counter}: {num_packets} frames over {duration:.2f}s ({input_fps} fps)")
 
-        # 2. Create unique temporary filenames
+        # 2. Create filenames
         timestamp = int(time.time() * 1000)
         base_name = f"chunk_{timestamp}_{chunk_counter}"
         temp_video_path = f"/tmp/{base_name}.h264"
         temp_audio_path = f"/tmp/{base_name}.pcm"
         ffmpeg_log_path = f"/tmp/{base_name}.ffmpeg.log"
         output_filename = f"live_stream_{timestamp}.mp4"
-        temp_output_path = f"/tmp/{output_filename}"
+        
+        # ATOMIC WRITE FIX:
+        # Write to chunks/.temp_name.mp4 (hidden from watcher)
+        # Then rename to chunks/name.mp4 (atomic)
+        temp_output_filename = f".temp_{output_filename}"
+        temp_output_path = os.path.join(CHUNK_DIR, temp_output_filename)
         final_output_path = os.path.join(CHUNK_DIR, output_filename)
         
         try:
             # 3. Write raw data to temp files
             with open(temp_video_path, "wb") as f:
-                # INJECT HEADER: Ensure every chunk starts with SPS/PPS
                 if video_header:
                     f.write(video_header)
-                
-                # Write the actual frames for this chunk
                 for packet in current_video:
                     f.write(packet["data"])
             
@@ -198,12 +197,11 @@ async def process_buffers():
                         f.write(packet["data"])
 
             # 4. Mux using FFmpeg
-            # We map inputs and force output to a clean MP4
             cmd = [
                 FFMPEG_CMD, "-y",
                 
                 # Input Video
-                "-r", str(input_fps), # Interpret input at actual captured FPS to preserve speed
+                "-r", str(input_fps), 
                 "-f", "h264", 
                 "-i", temp_video_path,
                 
@@ -211,12 +209,10 @@ async def process_buffers():
                 *(["-f", "s16le", "-ar", "16000", "-ac", "1", "-i", temp_audio_path] if has_audio else []),
                 
                 # Output Video Options
-                # We RE-ENCODE to Libx264 to normalize to 30fps output
-                # This duplicates frames if input_fps < 30, ensuring valid 10s video.
                 "-c:v", "libx264",
-                "-r", "30",           # Output Framerate
+                "-r", "30",
                 "-preset", "ultrafast",
-                "-pix_fmt", "yuv420p", # Ensure compatible pixel format
+                "-pix_fmt", "yuv420p",
                 
                 # Output Audio Options
                 *(["-c:a", "aac", "-b:a", "128k"] if has_audio else []),
@@ -224,7 +220,11 @@ async def process_buffers():
                 # Optimization
                 "-movflags", "+faststart",
                 
-                # Output Path
+                # Trim: Skip first 3s, keep next 14s
+                "-ss", "3",
+                "-t", "14",
+
+                # Output Path (Hidden Temp)
                 temp_output_path
             ]
             
@@ -237,18 +237,27 @@ async def process_buffers():
                 )
                 await process.wait()
             
+            # --- VALIDATION 2: Size & Success Check ---
             if process.returncode == 0:
-                shutil.move(temp_output_path, final_output_path)
-                print(f"✅ Created chunk: {output_filename}")
+                if os.path.exists(temp_output_path):
+                    size = os.path.getsize(temp_output_path)
+                    if size > 50 * 1024: # > 50KB (Valid Video)
+                        shutil.move(temp_output_path, final_output_path)
+                        print(f"✅ Created chunk: {output_filename} ({size/1024:.1f} KB)")
+                    else:
+                        print(f"⚠️  Discarding Chunk: File too small ({size} bytes)")
+                        os.remove(temp_output_path)
+                else:
+                     print("❌ FFmpeg Output File Missing")
                 
                 # Cleanup logs/temps on success
                 for p in [ffmpeg_log_path, temp_video_path, temp_audio_path]:
                     if os.path.exists(p):
                         os.remove(p)
             else:
-                print(f"❌ FFmpeg failed to create chunk {chunk_counter} (Return code: {process.returncode})")
-                print(f"   See log at: {ffmpeg_log_path}")
-                # Keep temp files for debugging
+                print(f"❌ FFmpeg failed (RC: {process.returncode}). See log: {ffmpeg_log_path}")
+                if os.path.exists(temp_output_path):
+                    os.remove(temp_output_path)
 
         except Exception as e:
             print(f"❌ Error processing chunk {chunk_counter}: {e}")
