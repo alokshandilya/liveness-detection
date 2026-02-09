@@ -3,6 +3,7 @@ import json
 import logging
 from typing import List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, BackgroundTasks
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import httpx
 from logic.liveness import check_liveness
@@ -46,6 +47,11 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+@app.get("/", response_class=HTMLResponse)
+async def get():
+    with open(os.path.join(os.path.dirname(__file__), "monitor.html"), "r") as f:
+        return f.read()
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
@@ -80,7 +86,7 @@ async def call_service_c(file_path: str, client: httpx.AsyncClient):
         file_name = os.path.basename(file_path)
         with open(file_path, "rb") as f:
              files = {"file": (file_name, f, "video/mp4")}
-             response = await client.post(SERVICE_C_URL, files=files, timeout=60.0)
+             response = await client.post(SERVICE_C_URL, files=files, timeout=200.0)
              response.raise_for_status()
              return response.json()
     except Exception as e:

@@ -2,18 +2,28 @@ import os
 import sys
 import requests
 import argparse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Check for API Key
 API_KEY = os.getenv("RECALL_API_KEY")
+NGROK_URL = os.getenv("NGROK_URL")
+REGION = os.getenv("REGION", "us-east-1")
 
-def spawn_bot(meeting_url, ngrok_url, bot_name="Liveness Detector", region="us-east-1"):
+def spawn_bot(meeting_url, bot_name="Liveness Detector"):
     if not API_KEY:
         print("Error: RECALL_API_KEY environment variable not set.")
-        print("Please export it: export RECALL_API_KEY='your_api_key_here'")
+        print("Please set it in your .env file.")
+        sys.exit(1)
+
+    if not NGROK_URL:
+        print("Error: NGROK_URL environment variable not set.")
+        print("Please set it in your .env file.")
         sys.exit(1)
 
     # Clean the ngrok URL to ensure it doesn't end with a slash
-    ngrok_url = ngrok_url.rstrip("/")
+    ngrok_url = NGROK_URL.rstrip("/")
 
     # Convert HTTP/HTTPS to WS/WSS for the config
     # Note: Recall.ai expects the full websocket URL in the config
@@ -74,8 +84,8 @@ def spawn_bot(meeting_url, ngrok_url, bot_name="Liveness Detector", region="us-e
     print("-" * 50)
 
     try:
-        api_url = f"https://{region}.recall.ai/api/v1/bot/"
-        print(f"Connecting to Region: {region} ({api_url})")
+        api_url = f"https://{REGION}.recall.ai/api/v1/bot/"
+        print(f"Connecting to Region: {REGION} ({api_url})")
 
         response = requests.post(api_url, json=payload, headers=headers)
         
@@ -94,10 +104,8 @@ def spawn_bot(meeting_url, ngrok_url, bot_name="Liveness Detector", region="us-e
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Spawn a Recall.ai bot for Liveness Detection")
     parser.add_argument("--url", required=True, help="The Zoom/Google Meet/Teams meeting URL")
-    parser.add_argument("--ngrok", required=True, help="Your Ngrok forwarding URL (e.g. https://xyz.ngrok-free.app)")
     parser.add_argument("--name", default="Deepfake Detector", help="Name of the bot to appear in meeting")
-    parser.add_argument("--region", default="us-east-1", help="Recall.ai Region (e.g. us-east-1, ap-northeast-1)")
     
     args = parser.parse_args()
     
-    spawn_bot(args.url, args.ngrok, args.name, args.region)
+    spawn_bot(args.url, args.name)
