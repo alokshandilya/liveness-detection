@@ -16,6 +16,12 @@ class PayloadHandler(FileSystemEventHandler):
             return
         self.process(event.src_path)
 
+    def on_moved(self, event):
+        # Support atomic writes: .temp.mp4 -> live.mp4 triggers a move event
+        if event.is_directory:
+            return
+        self.process(event.dest_path)
+
     # Fallback or alternative if "on_closed" isn't firing expectedly (e.g. strict copy)
     # But usually copying a file triggers Create -> Modify... -> Close.
     # We'll use on_closed to ensure we don't read partial files.
