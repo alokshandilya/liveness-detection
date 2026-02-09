@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-MEETING_URL = os.getenv("MEETING_URL", "https://meet.google.com/wga-srzk-hyj")
 NGROK_FULL_URL = os.getenv("NGROK_URL", "")
 
 processes = []
@@ -93,17 +92,7 @@ def main():
     print("⏳ Waiting 5 seconds for services to initialize...")
     time.sleep(5)
 
-    # 5. Spawn Bot
-    # This runs once to initiate the bot connection
-    print(f"🤖 Spawning Bot for {MEETING_URL}...")
-    try:
-        # spawn_bot.py now reads API_KEY, NGROK, REGION from .env
-        subprocess.run(
-            [sys.executable, "spawn_bot.py", "--url", MEETING_URL],
-            check=True
-        )
-    except subprocess.CalledProcessError:
-        print("❌ Failed to spawn bot.")
+
     
     print("\n✅ System Running. Open http://localhost:8000 to monitor.")
     print("Press Ctrl+C to stop.")

@@ -1,53 +1,162 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-    <title>Liveness Detection Monitor</title>
-    <style>
-        body { font-family: monospace; background: #1e1e1e; color: #00ff00; padding: 20px; }
-        h1 { color: #fff; }
-        #log { border: 1px solid #333; padding: 10px; height: 80vh; overflow-y: scroll; background: #000; }
-        .entry { margin-bottom: 10px; border-bottom: 1px dashed #333; padding-bottom: 5px; }
-        .success { color: #00ff00; }
-        .fail { color: #ff0000; }
-        .json { color: #aaa; font-size: 0.9em; }
-    </style>
-</head>
-<body>
-    <h1>Liveness Detection Stream (ws://localhost:8000/ws)</h1>
-    <div id="log">Connecting...</div>
+    <head>
+        <title>Liveness Detection Monitor</title>
+        <style>
+            body {
+                font-family: monospace;
+                background: #1e1e1e;
+                color: #00ff00;
+                padding: 20px;
+            }
+            h1 {
+                color: #fff;
+            }
+            #log {
+                border: 1px solid #333;
+                padding: 10px;
+                height: 80vh;
+                overflow-y: scroll;
+                background: #000;
+            }
+            .entry {
+                margin-bottom: 10px;
+                border-bottom: 1px dashed #333;
+                padding-bottom: 5px;
+            }
+            .success {
+                color: #00ff00;
+            }
+            .fail {
+                color: #ff0000;
+            }
+            .json {
+                color: #aaa;
+                font-size: 0.9em;
+            }
+            #controls {
+                margin-bottom: 20px;
+                padding: 15px;
+                background: #2d2d2d;
+                border: 1px solid #444;
+            }
+            input[type="text"] {
+                width: 400px;
+                padding: 8px;
+                background: #000;
+                border: 1px solid #555;
+                color: #0f0;
+                font-family: monospace;
+            }
+            button {
+                padding: 8px 15px;
+                background: #004400;
+                color: #0f0;
+                border: 1px solid #0f0;
+                cursor: pointer;
+                font-family: monospace;
+            }
+            button:hover {
+                background: #006600;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Liveness Detection Monitor</h1>
 
-    <script>
-        const logDiv = document.getElementById('log');
-        const ws = new WebSocket('ws://localhost:8000/ws');
+        <div id="controls">
+            <input
+                type="text"
+                id="meetingUrl"
+                placeholder="https://meet.google.com/..."
+            />
+            <button onclick="spawnBot()">Spawn Bot</button>
+            <span id="status" style="margin-left: 10px; color: #fff"></span>
+        </div>
 
-        ws.onopen = function() {
-            logDiv.innerHTML += '<div class="entry"><b>[System] Connected to WebSocket</b></div>';
-        };
+        <div id="log">Waiting for connection...</div>
 
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            const verdictClass = data.verdict === 'REAL' ? 'success' : 'fail';
-            
-            const html = `
+        <script>
+            const logDiv = document.getElementById("log");
+            const ws = new WebSocket("ws://" + window.location.host + "/ws");
+
+            ws.onopen = function () {
+                logDiv.innerHTML +=
+                    '<div class="entry"><b>[System] Connected to WebSocket</b></div>';
+            };
+
+            async function spawnBot() {
+                const urlInput = document.getElementById("meetingUrl");
+                const statusSpan = document.getElementById("status");
+                const url = urlInput.value.trim();
+
+                if (!url) {
+                    alert("Please enter a meeting URL");
+                    return;
+                }
+
+                statusSpan.innerText = "Spawning bot...";
+                statusSpan.style.color = "#ffff00";
+
+                try {
+                    const response = await fetch("/spawn", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ url: url }),
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        statusSpan.innerText =
+                            "Bot Spawned! ID: " + (data.bot_id || "OK");
+                        statusSpan.style.color = "#00ff00";
+                        logDiv.innerHTML =
+                            '<div class="entry success"><b>[System] Bot Spawn Requested for ' +
+                            url +
+                            "</b></div>" +
+                            logDiv.innerHTML;
+                    } else {
+                        statusSpan.innerText =
+                            "Error: " + (data.detail || "Failed");
+                        statusSpan.style.color = "#ff0000";
+                    }
+                } catch (err) {
+                    console.error(err);
+                    statusSpan.innerText = "Request Failed";
+                    statusSpan.style.color = "#ff0000";
+                }
+            }
+
+            ws.onmessage = function (event) {
+                const data = JSON.parse(event.data);
+                const verdictClass =
+                    data.verdict === "REAL" ? "success" : "fail";
+
+                const html = `
                 <div class="entry">
-                    <div><b>File:</b> ${data.chunk_path.split('/').pop()}</div>
+                    <div><b>File:</b> ${data.chunk_path.split("/").pop()}</div>
                     <div class="${verdictClass}"><b>Verdict:</b> ${data.verdict}</div>
-                    ${data.reasons.length > 0 ? `<div class="fail"><b>Reasons:</b> ${data.reasons.join(', ')}</div>` : ''}
+                    ${data.reasons.length > 0 ? `<div class="fail"><b>Reasons:</b> ${data.reasons.join(", ")}</div>` : ""}
                     <pre class="json">${JSON.stringify(data.details, null, 2)}</pre>
                 </div>
             `;
-            
-            logDiv.innerHTML = html + logDiv.innerHTML;
-        };
 
-        ws.onclose = function() {
-            logDiv.innerHTML = '<div class="entry fail"><b>[System] Disconnected</b></div>' + logDiv.innerHTML;
-        };
-        
-        ws.onerror = function(err) {
-             console.error(err);
-             logDiv.innerHTML = '<div class="entry fail"><b>[System] Error - Check Console</b></div>' + logDiv.innerHTML;
-        }
-    </script>
-</body>
+                logDiv.innerHTML = html + logDiv.innerHTML;
+            };
+
+            ws.onclose = function () {
+                logDiv.innerHTML =
+                    '<div class="entry fail"><b>[System] Disconnected</b></div>' +
+                    logDiv.innerHTML;
+            };
+
+            ws.onerror = function (err) {
+                console.error(err);
+                logDiv.innerHTML =
+                    '<div class="entry fail"><b>[System] Error - Check Console</b></div>' +
+                    logDiv.innerHTML;
+            };
+        </script>
+    </body>
 </html>

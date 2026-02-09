@@ -8,6 +8,7 @@ from pydantic import BaseModel
 import httpx
 from logic.liveness import check_liveness
 import os
+import sys
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,6 +26,9 @@ SERVICE_C_URL = os.getenv("SYNCNET_MODEL_URL", "http://127.0.0.1:8002/check-sync
 # Data Models
 class ChunkRequest(BaseModel):
     file_path: str
+
+class SpawnRequest(BaseModel):
+    url: str
 
 class ConnectionManager:
     def __init__(self):
@@ -54,6 +58,35 @@ manager = ConnectionManager()
 async def get():
     with open(os.path.join(os.path.dirname(__file__), "monitor.html"), "r") as f:
         return f.read()
+
+@app.post("/spawn")
+async def spawn_bot_endpoint(request: SpawnRequest):
+    logger.info(f"Spawning bot for: {request.url}")
+    try:
+        # Run spawn_bot.py as a subprocess to keep environment/logic isolated
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, "spawn_bot.py", "--url", request.url,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        
+        output = stdout.decode()
+        if proc.returncode == 0:
+            # Simple parse for Bot ID if present in output
+            bot_id = "Unknown"
+            for line in output.split('\n'):
+                if "Bot ID:" in line:
+                    bot_id = line.split("Bot ID:")[1].strip()
+            return {"status": "ok", "bot_id": bot_id, "output": output}
+        else:
+            error_msg = stderr.decode() or output
+            logger.error(f"Spawn failed: {error_msg}")
+            return HTMLResponse(status_code=500, content=json.dumps({"detail": error_msg}))
+            
+    except Exception as e:
+        logger.error(f"Spawn exception: {e}")
+        return HTMLResponse(status_code=500, content=json.dumps({"detail": str(e)}))
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
