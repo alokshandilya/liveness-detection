@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Configuration
-MEETING_URL = "https://meet.google.com/wga-srzk-hyj"
+MEETING_URL = os.getenv("MEETING_URL", "https://meet.google.com/wga-srzk-hyj")
 NGROK_FULL_URL = os.getenv("NGROK_URL", "")
 
 processes = []

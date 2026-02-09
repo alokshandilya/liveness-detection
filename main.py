@@ -8,6 +8,9 @@ from pydantic import BaseModel
 import httpx
 from logic.liveness import check_liveness
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Logging Setup
 logging.basicConfig(level=logging.INFO)
@@ -16,8 +19,8 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # Service URLs
-SERVICE_B_URL = "http://127.0.0.1:8001/detect"
-SERVICE_C_URL = "http://127.0.0.1:8002/check-sync"
+SERVICE_B_URL = os.getenv("EFFORT_MODEL_URL", "http://127.0.0.1:8001/detect")
+SERVICE_C_URL = os.getenv("SYNCNET_MODEL_URL", "http://127.0.0.1:8002/check-sync")
 
 # Data Models
 class ChunkRequest(BaseModel):
