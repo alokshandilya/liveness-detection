@@ -71,21 +71,21 @@ def main():
     # Serves monitor.html and handles chunk processing
     start_process("uvicorn main:app --host 0.0.0.0 --port 8000", "API")
 
-    # 2. Start Bridge Server (Port 8003)
+    # 2. Start Bridge Server (Port 5000)
     # Receives streams from Recall.ai
-    start_process("python bridge_server.py", "BRIDGE")
+    start_process("python -u bridge_server.py", "BRIDGE")
 
     # 3. Start Watcher
     # Watches /chunks folder
-    start_process("python watcher.py", "WATCHER")
+    start_process("python -u watcher.py", "WATCHER")
 
-    # 4. Start Ngrok (Port 8003)
+    # 4. Start Ngrok (Port 5000)
     # We attempt to use the domain from .env if it looks like a custom ngrok domain
-    ngrok_cmd = "ngrok http 8003"
+    ngrok_cmd = "ngrok http 5000"
     if "ngrok-free.dev" in NGROK_FULL_URL or "ngrok.io" in NGROK_FULL_URL:
         domain = extract_domain(NGROK_FULL_URL)
         print(f"ℹ️  Using Ngrok Domain: {domain}")
-        ngrok_cmd = f"ngrok http --domain={domain} 8003"
+        ngrok_cmd = f"ngrok http --url={domain} 5000"
     
     start_process(ngrok_cmd, "NGROK")
 

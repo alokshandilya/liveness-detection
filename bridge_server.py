@@ -1,5 +1,6 @@
 import asyncio
 import os
+import sys
 import time
 import json
 import base64
@@ -19,6 +20,9 @@ FFMPEG_CMD = "ffmpeg"  # Ensure ffmpeg is in your PATH
 os.makedirs(CHUNK_DIR, exist_ok=True)
 
 app = FastAPI()
+
+# Force unbuffered output for logging
+sys.stdout.reconfigure(line_buffering=True)
 
 # In-memory buffers
 # Structure: {'data': bytes, 'time': float}
@@ -55,7 +59,7 @@ def extract_payload(message_text):
 async def video_endpoint(websocket: WebSocket):
     global video_header
     await websocket.accept()
-    print("📹 Video stream connected")
+    print("📹 Video stream connected", flush=True)
     
     packet_count = 0
     try:
@@ -71,7 +75,7 @@ async def video_endpoint(websocket: WebSocket):
             if payload:
                 # Save the first packet as the header (SPS/PPS usually)
                 if video_header is None:
-                    print(f"🔑 Captured Video Header ({len(payload)} bytes)")
+                    print(f"🔑 Captured Video Header ({len(payload)} bytes)", flush=True)
                     video_header = payload
                 
                 async with buffer_lock:
@@ -79,17 +83,17 @@ async def video_endpoint(websocket: WebSocket):
                 
                 packet_count += 1
                 if packet_count % 30 == 0:
-                    pass 
+                    print(f"📹 Video packets: {packet_count}", flush=True)
 
     except WebSocketDisconnect:
-        print("📹 Video stream disconnected")
+        print("📹 Video stream disconnected", flush=True)
     except Exception as e:
-        print(f"❌ Video Error: {e}")
+        print(f"❌ Video Error: {e}", flush=True)
 
 @app.websocket("/recall-audio-endpoint")
 async def audio_endpoint(websocket: WebSocket):
     await websocket.accept()
-    print("🎙️ Audio stream connected")
+    print("🎙️ Audio stream connected", flush=True)
     
     packet_count = 0
     try:
@@ -108,12 +112,12 @@ async def audio_endpoint(websocket: WebSocket):
                 
                 packet_count += 1
                 if packet_count % 50 == 0:
-                    pass
+                    print(f"🎙️ Audio packets: {packet_count}", flush=True)
                 
     except WebSocketDisconnect:
-        print("🎙️ Audio stream disconnected")
+        print("🎙️ Audio stream disconnected", flush=True)
     except Exception as e:
-        print(f"❌ Audio Error: {e}")
+        print(f"❌ Audio Error: {e}", flush=True)
 
 async def process_buffers():
     """
@@ -121,7 +125,7 @@ async def process_buffers():
     into an MP4 file using FFmpeg, then moves it to the chunks directory.
     """
     chunk_counter = 0
-    print(f"⏱️  Background Processor Started (Every {CHUNK_DURATION}s)")
+    print(f"⏱️  Background Processor Started (Every {CHUNK_DURATION}s)", flush=True)
     
     while True:
         await asyncio.sleep(CHUNK_DURATION)
@@ -151,7 +155,7 @@ async def process_buffers():
         duration = t_end - t_start
         
         if duration < 15.0:
-            print(f"⚠️  Skipping Chunk {chunk_counter}: Duration too short ({duration:.2f}s < 15s)")
+            print(f"⚠️  Skipping Chunk {chunk_counter}: Duration too short ({duration:.2f}s < 15s)", flush=True)
             continue
 
         # --- DYNAMIC FPS CALCULATION ---
@@ -164,7 +168,7 @@ async def process_buffers():
         input_fps = max(min(input_fps, 60.0), 1.0)
         input_fps = round(input_fps, 2)
 
-        print(f"📦 Processing chunk {chunk_counter}: {num_packets} frames over {duration:.2f}s ({input_fps} fps)")
+        print(f"📦 Processing chunk {chunk_counter}: {num_packets} frames over {duration:.2f}s ({input_fps} fps)", flush=True)
 
         # 2. Create filenames
         timestamp = int(time.time() * 1000)
@@ -243,24 +247,24 @@ async def process_buffers():
                     size = os.path.getsize(temp_output_path)
                     if size > 50 * 1024: # > 50KB (Valid Video)
                         shutil.move(temp_output_path, final_output_path)
-                        print(f"✅ Created chunk: {output_filename} ({size/1024:.1f} KB)")
+                        print(f"✅ Created chunk: {output_filename} ({size/1024:.1f} KB)", flush=True)
                     else:
-                        print(f"⚠️  Discarding Chunk: File too small ({size} bytes)")
+                        print(f"⚠️  Discarding Chunk: File too small ({size} bytes)", flush=True)
                         os.remove(temp_output_path)
                 else:
-                     print("❌ FFmpeg Output File Missing")
+                     print("❌ FFmpeg Output File Missing", flush=True)
                 
                 # Cleanup logs/temps on success
                 for p in [ffmpeg_log_path, temp_video_path, temp_audio_path]:
                     if os.path.exists(p):
                         os.remove(p)
             else:
-                print(f"❌ FFmpeg failed (RC: {process.returncode}). See log: {ffmpeg_log_path}")
+                print(f"❌ FFmpeg failed (RC: {process.returncode}). See log: {ffmpeg_log_path}", flush=True)
                 if os.path.exists(temp_output_path):
                     os.remove(temp_output_path)
 
         except Exception as e:
-            print(f"❌ Error processing chunk {chunk_counter}: {e}")
+            print(f"❌ Error processing chunk {chunk_counter}: {e}", flush=True)
         
         finally:
             chunk_counter += 1
@@ -271,6 +275,6 @@ async def startup_event():
     asyncio.create_task(process_buffers())
 
 if __name__ == "__main__":
-    print(f"Starting Bridge Server on port 8003...")
-    print(f"Chunks will be written to: {CHUNK_DIR}")
-    uvicorn.run(app, host="0.0.0.0", port=8003)
+    print(f"Starting Bridge Server on port 5000...", flush=True)
+    print(f"Chunks will be written to: {CHUNK_DIR}", flush=True)
+    uvicorn.run(app, host="0.0.0.0", port=5000)
