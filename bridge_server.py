@@ -12,7 +12,7 @@ import uvicorn
 
 # --- Configuration ---
 CHUNK_DIR = os.path.join(os.getcwd(), "chunks")
-CHUNK_DURATION = 20.0  # Seconds
+CHUNK_DURATION = 15.0  # Seconds
 FFMPEG_CMD = "ffmpeg"  # Ensure ffmpeg is in your PATH
 
 # Ensure the chunks directory exists
@@ -271,6 +271,6 @@ async def startup_event():
     asyncio.create_task(process_buffers())
 
 if __name__ == "__main__":
-    print(f"Starting Bridge Server on port 5000...")
+    print(f"Starting Bridge Server on port 8003...")
     print(f"Chunks will be written to: {CHUNK_DIR}")
-    uvicorn.run(app, host="0.0.0.0", port=5000)
+    uvicorn.run(app, host="0.0.0.0", port=8003)

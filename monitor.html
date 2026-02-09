@@ -1,93 +1,606 @@
 <!doctype html>
-<html>
+<html lang="en">
     <head>
-        <title>Liveness Detection Monitor</title>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Deepfake Defense | Live Monitor</title>
+
+        <!-- Tailwind CSS -->
+        <script src="https://cdn.tailwindcss.com"></script>
+
+        <!-- Font Awesome -->
+        <link
+            rel="stylesheet"
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        />
+
+        <!-- Google Fonts -->
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+            rel="stylesheet"
+        />
+
+        <script>
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        fontFamily: {
+                            sans: ["Inter", "sans-serif"],
+                        },
+                        colors: {
+                            gray: {
+                                850: "#1f2937",
+                                900: "#111827",
+                                950: "#030712",
+                            },
+                        },
+                    },
+                },
+            };
+        </script>
+
         <style>
             body {
-                font-family: monospace;
-                background: #1e1e1e;
-                color: #00ff00;
-                padding: 20px;
+                background-color: #030712; /* gray-950 */
             }
-            h1 {
-                color: #fff;
+
+            /* Custom Scrollbar */
+            ::-webkit-scrollbar {
+                width: 8px;
             }
-            #log {
-                border: 1px solid #333;
-                padding: 10px;
-                height: 80vh;
-                overflow-y: scroll;
-                background: #000;
+            ::-webkit-scrollbar-track {
+                background: #1f2937;
             }
-            .entry {
-                margin-bottom: 10px;
-                border-bottom: 1px dashed #333;
-                padding-bottom: 5px;
+            ::-webkit-scrollbar-thumb {
+                background: #4b5563;
+                border-radius: 4px;
             }
-            .success {
-                color: #00ff00;
+            ::-webkit-scrollbar-thumb:hover {
+                background: #6b7280;
             }
-            .fail {
-                color: #ff0000;
-            }
-            .json {
-                color: #aaa;
-                font-size: 0.9em;
-            }
-            #controls {
-                margin-bottom: 20px;
-                padding: 15px;
-                background: #2d2d2d;
-                border: 1px solid #444;
-            }
-            input[type="text"] {
-                width: 400px;
-                padding: 8px;
-                background: #000;
-                border: 1px solid #555;
-                color: #0f0;
-                font-family: monospace;
-            }
-            button {
-                padding: 8px 15px;
-                background: #004400;
-                color: #0f0;
-                border: 1px solid #0f0;
-                cursor: pointer;
-                font-family: monospace;
-            }
-            button:hover {
-                background: #006600;
+
+            .meter-fill {
+                transition: width 0.5s ease-out;
             }
         </style>
     </head>
-    <body>
-        <h1>Liveness Detection Monitor</h1>
+    <body class="text-gray-200 h-screen flex flex-col overflow-hidden">
+        <!-- Header -->
+        <header
+            class="relative bg-gray-900 border-b border-gray-800 p-4 shadow-lg z-50"
+        >
+            <div class="max-w-7xl mx-auto flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div
+                        class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"
+                    >
+                        <i
+                            class="fa-solid fa-shield-halved text-white text-sm"
+                        ></i>
+                    </div>
+                    <h1 class="text-xl font-bold tracking-tight text-white">
+                        Deepfake<span class="text-blue-500">Defense</span>
+                        Monitor
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div
+                        id="connection-status"
+                        class="flex items-center space-x-2 text-sm text-yellow-500"
+                    >
+                        <span class="relative flex h-3 w-3">
+                            <span
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"
+                            ></span>
+                            <span
+                                class="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"
+                            ></span>
+                        </span>
+                        <span>Connecting...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
 
-        <div id="controls">
-            <input
-                type="text"
-                id="meetingUrl"
-                placeholder="https://meet.google.com/..."
-            />
-            <button onclick="spawnBot()">Spawn Bot</button>
-            <span id="status" style="margin-left: 10px; color: #fff"></span>
-        </div>
+        <!-- Main Content -->
+        <main
+            class="flex-1 overflow-hidden flex flex-col max-w-7xl mx-auto w-full p-6 space-y-6"
+        >
+            <!-- Controls Section -->
+            <div
+                class="relative z-20 bg-gray-900 rounded-xl border border-gray-800 p-5 shadow-sm"
+            >
+                <div class="flex flex-col md:flex-row gap-4 items-end">
+                    <div class="flex-1 w-full">
+                        <label
+                            class="block text-xs font-medium text-gray-400 mb-1 uppercase tracking-wider"
+                            >Target Meeting URL</label
+                        >
+                        <div class="relative">
+                            <div
+                                class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                            >
+                                <i class="fa-solid fa-video text-gray-500"></i>
+                            </div>
+                            <input
+                                type="text"
+                                id="meetingUrl"
+                                class="bg-gray-950 border border-gray-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5 placeholder-gray-600 transition-colors"
+                                placeholder="https://meet.google.com/..."
+                                value=""
+                            />
+                        </div>
+                    </div>
+                    <div class="w-full md:w-auto flex items-center gap-3">
+                        <button
+                            onclick="spawnBot()"
+                            id="spawnBtn"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center inline-flex items-center transition-all shadow-lg shadow-blue-900/20"
+                        >
+                            <i class="fa-solid fa-robot mr-2"></i>
+                            Spawn Bot
+                        </button>
+                        <div
+                            id="spawn-status"
+                            class="text-sm font-medium hidden"
+                        ></div>
+                    </div>
+                </div>
+            </div>
 
-        <div id="log">Waiting for connection...</div>
+            <!-- Dashboard Grid -->
+            <div
+                class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden"
+            >
+                <!-- Left Column: Live Analysis (Sticky/Fixed Look) -->
+                <div
+                    class="lg:col-span-2 flex flex-col space-y-4 overflow-hidden"
+                >
+                    <!-- Latest Verdict Card -->
+                    <div
+                        id="latest-card"
+                        class="relative bg-gray-900 rounded-xl border border-gray-800 p-0 overflow-hidden shadow-2xl flex flex-col h-full opacity-50 transition-opacity duration-500"
+                    >
+                        <!-- Overlay for "Waiting" state -->
+                        <div
+                            id="waiting-overlay"
+                            class="absolute inset-0 z-10 bg-gray-900/80 flex flex-col items-center justify-center backdrop-blur-sm"
+                        >
+                            <i
+                                class="fa-solid fa-wave-square text-4xl text-gray-600 mb-3 animate-pulse"
+                            ></i>
+                            <p class="text-gray-400 font-medium">
+                                Waiting for video stream analysis...
+                            </p>
+                        </div>
+
+                        <!-- Header with Verdict -->
+                        <div
+                            class="p-6 border-b border-gray-800 flex justify-between items-center bg-gray-850"
+                        >
+                            <div>
+                                <p class="text-sm text-gray-400 mb-1">
+                                    Latest Chunk Analysis
+                                </p>
+                                <h2
+                                    id="current-filename"
+                                    class="text-xs font-mono text-gray-500"
+                                >
+                                    ...
+                                </h2>
+                            </div>
+                            <div
+                                id="main-verdict-badge"
+                                class="px-4 py-1.5 rounded-full text-lg font-bold tracking-wide border bg-gray-800 border-gray-600 text-gray-400"
+                            >
+                                WAITING
+                            </div>
+                        </div>
+
+                        <!-- Metrics Grid -->
+                        <div
+                            class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto"
+                        >
+                            <!-- Visual Analysis -->
+                            <div class="space-y-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <i
+                                        class="fa-solid fa-eye text-blue-400"
+                                    ></i>
+                                    <h3 class="font-semibold text-gray-200">
+                                        Visual Analysis
+                                    </h3>
+                                </div>
+
+                                <!-- Deepfake Prob -->
+                                <div
+                                    class="bg-gray-950 p-4 rounded-lg border border-gray-800"
+                                >
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-sm text-gray-400"
+                                            >Deepfake Probability</span
+                                        >
+                                        <span
+                                            id="visual-score-val"
+                                            class="text-sm font-bold text-gray-200"
+                                            >0%</span
+                                        >
+                                    </div>
+                                    <div
+                                        class="w-full bg-gray-800 rounded-full h-2.5"
+                                    >
+                                        <div
+                                            id="visual-score-bar"
+                                            class="bg-gray-600 h-2.5 rounded-full meter-fill"
+                                            style="width: 0%"
+                                        ></div>
+                                    </div>
+                                    <p
+                                        id="visual-desc"
+                                        class="text-xs text-gray-500 mt-2"
+                                    >
+                                        Model: Effort (ICML 2025)
+                                    </p>
+                                </div>
+
+                                <!-- Liveness Metrics -->
+                                <div
+                                    class="bg-gray-950 p-4 rounded-lg border border-gray-800 space-y-4"
+                                >
+                                    <div>
+                                        <div class="flex justify-between mb-1">
+                                            <span class="text-sm text-gray-400"
+                                                >Blink Activity</span
+                                            >
+                                            <span
+                                                id="blink-val"
+                                                class="text-xs font-mono text-gray-500"
+                                                >0.00</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="w-full bg-gray-800 rounded-full h-1.5"
+                                        >
+                                            <div
+                                                id="blink-bar"
+                                                class="bg-purple-500 h-1.5 rounded-full meter-fill"
+                                                style="width: 0%"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div class="flex justify-between mb-1">
+                                            <span class="text-sm text-gray-400"
+                                                >Head Movement</span
+                                            >
+                                            <span
+                                                id="head-val"
+                                                class="text-xs font-mono text-gray-500"
+                                                >0.00</span
+                                            >
+                                        </div>
+                                        <div
+                                            class="w-full bg-gray-800 rounded-full h-1.5"
+                                        >
+                                            <div
+                                                id="head-bar"
+                                                class="bg-teal-500 h-1.5 rounded-full meter-fill"
+                                                style="width: 0%"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Audio Analysis -->
+                            <div class="space-y-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <i
+                                        class="fa-solid fa-microphone-lines text-green-400"
+                                    ></i>
+                                    <h3 class="font-semibold text-gray-200">
+                                        Audio & Sync
+                                    </h3>
+                                </div>
+
+                                <!-- Lip Sync -->
+                                <div
+                                    class="bg-gray-950 p-4 rounded-lg border border-gray-800"
+                                >
+                                    <div
+                                        class="flex justify-between items-center mb-2"
+                                    >
+                                        <span class="text-sm text-gray-400"
+                                            >Lip Sync Status</span
+                                        >
+                                        <span
+                                            id="sync-badge"
+                                            class="px-2 py-0.5 rounded text-xs font-bold bg-gray-800 text-gray-500"
+                                            >Unknown</span
+                                        >
+                                    </div>
+                                    <div class="flex justify-between mb-1 mt-3">
+                                        <span class="text-xs text-gray-500"
+                                            >Sync Error (Distance)</span
+                                        >
+                                        <span
+                                            id="sync-dist-val"
+                                            class="text-xs font-bold text-gray-300"
+                                            >-</span
+                                        >
+                                    </div>
+                                    <!-- Inverted bar: Lower distance is better. Assuming range 0-15 roughly -->
+                                    <div
+                                        class="w-full bg-gray-800 rounded-full h-2.5 relative"
+                                    >
+                                        <!-- Threshold Marker (approx 7.0) -->
+                                        <div
+                                            class="absolute top-0 bottom-0 w-0.5 bg-red-500/50 z-10"
+                                            style="left: 46%"
+                                            title="Threshold"
+                                        ></div>
+                                        <div
+                                            id="sync-dist-bar"
+                                            class="bg-green-600 h-2.5 rounded-full meter-fill"
+                                            style="width: 0%"
+                                        ></div>
+                                    </div>
+                                    <p class="text-xs text-gray-500 mt-2">
+                                        Lower distance is better. Threshold ~7.0
+                                    </p>
+                                </div>
+
+                                <!-- Analysis Notes -->
+                                <div
+                                    id="reasons-box"
+                                    class="hidden p-3 bg-red-900/20 border border-red-900/50 rounded-lg"
+                                >
+                                    <p
+                                        class="text-xs text-red-400 font-bold mb-1"
+                                    >
+                                        <i
+                                            class="fa-solid fa-circle-exclamation mr-1"
+                                        ></i>
+                                        Detection Flags:
+                                    </p>
+                                    <ul
+                                        id="reasons-list"
+                                        class="list-disc list-inside text-xs text-red-300 space-y-1"
+                                    ></ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: History Log -->
+                <div
+                    class="flex flex-col bg-gray-900 rounded-xl border border-gray-800 shadow-sm overflow-hidden h-full"
+                >
+                    <div class="p-4 border-b border-gray-800 bg-gray-850">
+                        <h3 class="font-semibold text-gray-200">
+                            Analysis History
+                        </h3>
+                    </div>
+                    <div
+                        id="log-container"
+                        class="flex-1 overflow-y-auto p-2 space-y-2"
+                    >
+                        <!-- Dynamic entries will go here -->
+                        <div
+                            class="text-center text-gray-600 text-sm py-10 italic"
+                        >
+                            No data yet...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
 
         <script>
-            const logDiv = document.getElementById("log");
-            const ws = new WebSocket("ws://" + window.location.host + "/ws");
+            // --- Logic ---
+            const wsProtocol =
+                window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+            let ws;
 
-            ws.onopen = function () {
-                logDiv.innerHTML +=
-                    '<div class="entry"><b>[System] Connected to WebSocket</b></div>';
+            const ui = {
+                connStatus: document.getElementById("connection-status"),
+                latestCard: document.getElementById("latest-card"),
+                waitingOverlay: document.getElementById("waiting-overlay"),
+                mainVerdictBadge: document.getElementById("main-verdict-badge"),
+                filename: document.getElementById("current-filename"),
+
+                // Visual
+                visualScoreVal: document.getElementById("visual-score-val"),
+                visualScoreBar: document.getElementById("visual-score-bar"),
+                visualDesc: document.getElementById("visual-desc"),
+
+                // Liveness
+                blinkVal: document.getElementById("blink-val"),
+                blinkBar: document.getElementById("blink-bar"),
+                headVal: document.getElementById("head-val"),
+                headBar: document.getElementById("head-bar"),
+
+                // Audio
+                syncBadge: document.getElementById("sync-badge"),
+                syncDistVal: document.getElementById("sync-dist-val"),
+                syncDistBar: document.getElementById("sync-dist-bar"),
+
+                // Reasons
+                reasonsBox: document.getElementById("reasons-box"),
+                reasonsList: document.getElementById("reasons-list"),
+
+                // History
+                logContainer: document.getElementById("log-container"),
             };
 
+            function connectWs() {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = () => {
+                    ui.connStatus.innerHTML = `
+                    <span class="relative flex h-3 w-3">
+                      <span class="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                    </span>
+                    <span class="text-green-500">Connected</span>
+                `;
+                };
+
+                ws.onclose = () => {
+                    ui.connStatus.innerHTML = `
+                    <span class="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                    <span class="text-red-500">Disconnected</span>
+                `;
+                    setTimeout(connectWs, 3000); // Reconnect
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    updateDashboard(data);
+                    addToHistory(data);
+                };
+            }
+
+            function updateDashboard(data) {
+                // Remove waiting overlay
+                ui.latestCard.classList.remove("opacity-50");
+                ui.waitingOverlay.classList.add("hidden");
+
+                // 1. Verdict Badge
+                const isFake = data.verdict === "FAKE";
+                ui.mainVerdictBadge.innerText = data.verdict;
+                ui.mainVerdictBadge.className = isFake
+                    ? "px-4 py-1.5 rounded-full text-lg font-bold tracking-wide border bg-red-900/30 border-red-600 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]"
+                    : "px-4 py-1.5 rounded-full text-lg font-bold tracking-wide border bg-green-900/30 border-green-600 text-green-500 shadow-[0_0_15px_rgba(34,197,94,0.5)]";
+
+                ui.filename.innerText = data.chunk_path.split("/").pop();
+
+                // 2. Visual Check
+                const visual = data.details.visual_check || {};
+                const prob = visual.fake_probability || 0;
+                const probPct = (prob * 100).toFixed(1);
+
+                ui.visualScoreVal.innerText = `${probPct}%`;
+                ui.visualScoreBar.style.width = `${probPct}%`;
+
+                // Color scale for visual bar
+                if (prob < 0.3)
+                    ui.visualScoreBar.className =
+                        "h-2.5 rounded-full meter-fill bg-green-500";
+                else if (prob < 0.6)
+                    ui.visualScoreBar.className =
+                        "h-2.5 rounded-full meter-fill bg-yellow-500";
+                else
+                    ui.visualScoreBar.className =
+                        "h-2.5 rounded-full meter-fill bg-red-600";
+
+                if (visual.error) {
+                    ui.visualDesc.innerText = `Error: ${visual.error}`;
+                    ui.visualDesc.className = "text-xs text-red-400 mt-2";
+                } else {
+                    ui.visualDesc.innerText = `Model: ${visual.model_used || "Standard"}`;
+                    ui.visualDesc.className = "text-xs text-gray-500 mt-2";
+                }
+
+                // 3. Liveness Check
+                const live = data.details.liveness_check || {};
+                // Blink score is typically 0.0 - 0.5. Let's normalize loosely.
+                // 0.05 is "normal"ish in the logs.
+                ui.blinkVal.innerText = (live.blink_score || 0).toFixed(4);
+                // Cap visual bar at 0.1 for display purposes
+                const blinkPct = Math.min((live.blink_score || 0) * 1000, 100);
+                ui.blinkBar.style.width = `${blinkPct}%`;
+
+                ui.headVal.innerText = (live.head_pose_score || 0).toFixed(2);
+                // Head pose varies 0 to 50+.
+                const headPct = Math.min((live.head_pose_score || 0) * 2, 100);
+                ui.headBar.style.width = `${headPct}%`;
+
+                // 4. Audio Sync
+                const audio = data.details.audio_check || {};
+                const isSyncGood = audio.is_sync_good !== false; // Default true unless explicit false
+                const distance = audio.average_distance || 0;
+
+                ui.syncBadge.innerText = isSyncGood ? "PASS" : "FAIL";
+                ui.syncBadge.className = isSyncGood
+                    ? "px-2 py-0.5 rounded text-xs font-bold bg-green-900/50 text-green-400 border border-green-800"
+                    : "px-2 py-0.5 rounded text-xs font-bold bg-red-900/50 text-red-400 border border-red-800";
+
+                ui.syncDistVal.innerText = distance.toFixed(2);
+
+                // Map distance 0-15 to 0-100%.
+                // However, higher distance is WORSE.
+                // Threshold is ~7. So 7 should be roughly 46% (left side is good).
+                const distPct = Math.min((distance / 15) * 100, 100);
+                ui.syncDistBar.style.width = `${distPct}%`;
+
+                // Color based on Sync status or generic threshold
+                if (isSyncGood && distance < 7.5) {
+                    ui.syncDistBar.className =
+                        "h-2.5 rounded-full meter-fill bg-green-500";
+                } else {
+                    ui.syncDistBar.className =
+                        "h-2.5 rounded-full meter-fill bg-red-500";
+                }
+
+                // 5. Reasons
+                if (data.reasons && data.reasons.length > 0) {
+                    ui.reasonsBox.classList.remove("hidden");
+                    ui.reasonsList.innerHTML = data.reasons
+                        .map((r) => `<li>${r}</li>`)
+                        .join("");
+                } else {
+                    ui.reasonsBox.classList.add("hidden");
+                }
+            }
+
+            function addToHistory(data) {
+                const isFake = data.verdict === "FAKE";
+                const colorClass = isFake
+                    ? "text-red-500 border-l-4 border-red-500"
+                    : "text-green-500 border-l-4 border-green-500";
+                const bgClass = isFake ? "bg-red-900/10" : "bg-green-900/10";
+                const icon = isFake
+                    ? '<i class="fa-solid fa-triangle-exclamation"></i>'
+                    : '<i class="fa-solid fa-check"></i>';
+
+                const time = new Date().toLocaleTimeString();
+                const prob = (
+                    (data.details.visual_check?.fake_probability || 0) * 100
+                ).toFixed(0);
+
+                const html = `
+                <div class="p-3 rounded-r-lg ${bgClass} ${colorClass} text-sm flex justify-between items-center animate-in fade-in slide-in-from-right-4 duration-300">
+                    <div>
+                        <div class="font-bold flex items-center gap-2">
+                            ${icon} 
+                            <span>${data.verdict}</span>
+                            <span class="text-xs font-normal text-gray-500">${time}</span>
+                        </div>
+                        <div class="text-xs text-gray-400 mt-1">
+                            Vis: ${prob}% | Sync: ${data.details.audio_check?.average_distance?.toFixed(1) || "-"}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+                // Check if empty
+                if (
+                    ui.logContainer.children.length === 1 &&
+                    ui.logContainer.children[0].innerText.includes("No data")
+                ) {
+                    ui.logContainer.innerHTML = "";
+                }
+
+                ui.logContainer.insertAdjacentHTML("afterbegin", html);
+            }
+
+            // --- Bot Spawning ---
             async function spawnBot() {
                 const urlInput = document.getElementById("meetingUrl");
-                const statusSpan = document.getElementById("status");
+                const statusDiv = document.getElementById("spawn-status");
+                const btn = document.getElementById("spawnBtn");
                 const url = urlInput.value.trim();
 
                 if (!url) {
@@ -95,8 +608,12 @@
                     return;
                 }
 
-                statusSpan.innerText = "Spawning bot...";
-                statusSpan.style.color = "#ffff00";
+                // UI Loading State
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Spawning...';
+                statusDiv.classList.remove("hidden");
+                statusDiv.innerText = "";
 
                 try {
                     const response = await fetch("/spawn", {
@@ -108,55 +625,25 @@
                     const data = await response.json();
 
                     if (response.ok) {
-                        statusSpan.innerText =
-                            "Bot Spawned! ID: " + (data.bot_id || "OK");
-                        statusSpan.style.color = "#00ff00";
-                        logDiv.innerHTML =
-                            '<div class="entry success"><b>[System] Bot Spawn Requested for ' +
-                            url +
-                            "</b></div>" +
-                            logDiv.innerHTML;
+                        statusDiv.innerHTML = `<span class="text-green-400"><i class="fa-solid fa-check mr-1"></i> Bot Spawned!</span>`;
                     } else {
-                        statusSpan.innerText =
-                            "Error: " + (data.detail || "Failed");
-                        statusSpan.style.color = "#ff0000";
+                        statusDiv.innerHTML = `<span class="text-red-400"><i class="fa-solid fa-xmark mr-1"></i> Error: ${data.detail || "Failed"}</span>`;
                     }
                 } catch (err) {
                     console.error(err);
-                    statusSpan.innerText = "Request Failed";
-                    statusSpan.style.color = "#ff0000";
+                    statusDiv.innerHTML = `<span class="text-red-400">Request Failed</span>`;
+                } finally {
+                    // Reset Button
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.innerHTML =
+                            '<i class="fa-solid fa-robot mr-2"></i> Spawn Bot';
+                    }, 2000);
                 }
             }
 
-            ws.onmessage = function (event) {
-                const data = JSON.parse(event.data);
-                const verdictClass =
-                    data.verdict === "REAL" ? "success" : "fail";
-
-                const html = `
-                <div class="entry">
-                    <div><b>File:</b> ${data.chunk_path.split("/").pop()}</div>
-                    <div class="${verdictClass}"><b>Verdict:</b> ${data.verdict}</div>
-                    ${data.reasons.length > 0 ? `<div class="fail"><b>Reasons:</b> ${data.reasons.join(", ")}</div>` : ""}
-                    <pre class="json">${JSON.stringify(data.details, null, 2)}</pre>
-                </div>
-            `;
-
-                logDiv.innerHTML = html + logDiv.innerHTML;
-            };
-
-            ws.onclose = function () {
-                logDiv.innerHTML =
-                    '<div class="entry fail"><b>[System] Disconnected</b></div>' +
-                    logDiv.innerHTML;
-            };
-
-            ws.onerror = function (err) {
-                console.error(err);
-                logDiv.innerHTML =
-                    '<div class="entry fail"><b>[System] Error - Check Console</b></div>' +
-                    logDiv.innerHTML;
-            };
+            // Init
+            connectWs();
         </script>
     </body>
 </html>
