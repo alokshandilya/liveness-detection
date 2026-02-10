@@ -33,6 +33,9 @@
                                 900: "#111827",
                                 950: "#030712",
                             },
+                            orange: {
+                                500: "#f97316",
+                            },
                         },
                     },
                 },
@@ -642,12 +645,27 @@
                 ui.syncDistBar.style.width = `${distPct}%`;
 
                 // Color based on Sync status or generic threshold
-                if (avgSyncDist < 9.0) {
-                    ui.syncDistBar.className =
-                        "h-2.5 rounded-full meter-fill bg-green-500";
+                if (avgProb < 0.55) {
+                    // Low visual suspicion (< 55%): Generous threshold (9.0)
+                    if (avgSyncDist < 9.0) {
+                        ui.syncDistBar.className =
+                            "h-2.5 rounded-full meter-fill bg-green-500";
+                    } else {
+                        ui.syncDistBar.className =
+                            "h-2.5 rounded-full meter-fill bg-red-500";
+                    }
                 } else {
-                    ui.syncDistBar.className =
-                        "h-2.5 rounded-full meter-fill bg-red-500";
+                    // High visual suspicion (> 55%): Strict threshold (8.0) + Warning Zone
+                    if (avgSyncDist < 7.5) {
+                        ui.syncDistBar.className =
+                            "h-2.5 rounded-full meter-fill bg-green-500";
+                    } else if (avgSyncDist < 8.0) {
+                        ui.syncDistBar.className =
+                            "h-2.5 rounded-full meter-fill bg-orange-500";
+                    } else {
+                        ui.syncDistBar.className =
+                            "h-2.5 rounded-full meter-fill bg-red-500";
+                    }
                 }
 
                 // 5. Reasons
