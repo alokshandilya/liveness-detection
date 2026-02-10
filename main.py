@@ -6,6 +6,7 @@ import time
 from typing import List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, BackgroundTasks
 from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import httpx
 from logic.liveness import check_liveness
@@ -20,6 +21,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+# Mount chunks directory for download access
+if not os.path.exists("chunks"):
+    os.makedirs("chunks")
+app.mount("/chunks", StaticFiles(directory="chunks"), name="chunks")
 
 # Service URLs
 SERVICE_B_URL = os.getenv("EFFORT_MODEL_URL", "http://127.0.0.1:8001/detect")
@@ -128,7 +134,8 @@ async def call_service_c(file_path: str, client: httpx.AsyncClient):
         file_name = os.path.basename(file_path)
         with open(file_path, "rb") as f:
              files = {"file": (file_name, f, "video/mp4")}
-             response = await client.post(SERVICE_C_URL, files=files, timeout=200.0)
+             # Service C is SyncNet
+             response = await client.post(SERVICE_C_URL, files=files, timeout=60.0)
              response.raise_for_status()
              return response.json()
     except Exception as e:

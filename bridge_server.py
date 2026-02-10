@@ -153,6 +153,12 @@ async def process_buffers():
         if not current_video:
             continue
 
+        # SKIP FIRST CHUNK (Warmup to avoid audio sync issues)
+        if chunk_counter == 0:
+            print("⚠️  Skipping Chunk 0 (Warmup/Audio Sync Stabilization)", flush=True)
+            chunk_counter += 1
+            continue
+
         # --- VALIDATION 1: Duration Check ---
         # If the chunk represents < 10s of time, discard it (start/end partials).
         t_start = current_video[0]['time']
@@ -229,9 +235,9 @@ async def process_buffers():
                 # Optimization
                 "-movflags", "+faststart",
                 
-                # Trim: Skip first 3s, keep next 14s
+                # Trim: Skip first 3s, remove last 3s, and cap at 5s
                 "-ss", "3",
-                "-t", "14",
+                "-t", str(min(max(0.0, duration - 6.0), 5.0)),
 
                 # Output Path (Hidden Temp)
                 temp_output_path

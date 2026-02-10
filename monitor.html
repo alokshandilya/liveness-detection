@@ -676,6 +676,8 @@
                     (data.details.visual_check?.fake_probability || 0) * 100
                 ).toFixed(0);
 
+                const filename = data.chunk_path.split("/").pop();
+
                 const html = `
                 <div class="p-3 rounded-r-lg ${bgClass} ${colorClass} text-sm flex justify-between items-center animate-in fade-in slide-in-from-right-4 duration-300">
                     <div>
@@ -688,6 +690,9 @@
                             Vis: ${prob}% | Sync: ${data.details.audio_check?.average_distance?.toFixed(1) || "-"}
                         </div>
                     </div>
+                    <a href="/chunks/${filename}" download target="_blank" class="ml-2 p-2 text-gray-400 hover:text-white hover:bg-gray-800 rounded transition-colors" title="Download Video">
+                        <i class="fa-solid fa-download"></i>
+                    </a>
                 </div>
             `;
 
