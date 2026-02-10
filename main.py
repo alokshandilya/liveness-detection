@@ -159,6 +159,7 @@ async def run_analysis_pipeline(file_path: str):
     # FAKE if (Visual Prob > 0.6) OR (Sync Good == False) OR (Liveness Fail == True).
     
     visual_prob = service_b_res.get("fake_probability", 0.0)
+    sync_dist = service_c_res.get("average_distance", 100.0)
     is_sync_good = service_c_res.get("is_sync_good", True) # Default to True if missing
     is_liveness_fail = liveness_res.get("is_liveness_fail", False)
     
@@ -169,9 +170,12 @@ async def run_analysis_pipeline(file_path: str):
         verdict = "FAKE"
         reasons.append(f"Visual Probability High ({visual_prob})")
 
-    if not is_sync_good and visual_prob >= 0.2:
-        verdict = "FAKE"
-        reasons.append("Audio Sync Failed")
+    # Sync Logic: Ignore failure if visual is low (< 20%) OR (visual < 50% AND sync dist <= 9.0)
+    if not is_sync_good:
+        should_ignore = (visual_prob < 0.2) or (visual_prob < 0.5 and sync_dist <= 9.0)
+        if not should_ignore:
+            verdict = "FAKE"
+            reasons.append("Audio Sync Failed")
 
     if is_liveness_fail:
         verdict = "FAKE" 

@@ -398,10 +398,10 @@
                                     <div
                                         class="w-full bg-gray-800 rounded-full h-2.5 relative"
                                     >
-                                        <!-- Threshold Marker (approx 7.0) -->
+                                        <!-- Threshold Marker (approx 9.0) -->
                                         <div
                                             class="absolute top-0 bottom-0 w-0.5 bg-red-500/50 z-10"
-                                            style="left: 53%"
+                                            style="left: 60%"
                                             title="Threshold"
                                         ></div>
                                         <div
@@ -411,7 +411,7 @@
                                         ></div>
                                     </div>
                                     <p class="text-xs text-gray-500 mt-2">
-                                        Lower distance is better. Threshold ~8.0
+                                        Lower distance is better. Threshold ~9.0
                                     </p>
                                 </div>
 
@@ -637,12 +637,12 @@
 
                 // Map distance 0-15 to 0-100%.
                 // However, higher distance is WORSE.
-                // Threshold is ~8. So 8 should be roughly 53%.
+                // Threshold is ~9. So 9 should be roughly 60%.
                 const distPct = Math.min((avgSyncDist / 15) * 100, 100);
                 ui.syncDistBar.style.width = `${distPct}%`;
 
                 // Color based on Sync status or generic threshold
-                if (avgSyncDist < 8.0) {
+                if (avgSyncDist < 9.0) {
                     ui.syncDistBar.className =
                         "h-2.5 rounded-full meter-fill bg-green-500";
                 } else {
