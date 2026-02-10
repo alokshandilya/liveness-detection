@@ -125,9 +125,14 @@ async def process_buffers():
     into an MP4 file using FFmpeg, then moves it to the chunks directory.
     """
     chunk_counter = 0
+    valid_chunks = 0
     print(f"⏱️  Background Processor Started (Every {CHUNK_DURATION}s)", flush=True)
     
     while True:
+        if valid_chunks >= 10:
+            print("🛑 Max chunks (10) reached. Stopping processing.", flush=True)
+            break
+
         await asyncio.sleep(CHUNK_DURATION)
         
         # 1. Extract current data from buffers safely
@@ -248,6 +253,7 @@ async def process_buffers():
                     if size > 50 * 1024: # > 50KB (Valid Video)
                         shutil.move(temp_output_path, final_output_path)
                         print(f"✅ Created chunk: {output_filename} ({size/1024:.1f} KB)", flush=True)
+                        valid_chunks += 1
                     else:
                         print(f"⚠️  Discarding Chunk: File too small ({size} bytes)", flush=True)
                         os.remove(temp_output_path)

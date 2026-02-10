@@ -3,7 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Deepfake Defense | Live Monitor</title>
+        <title>Liveness Detection | Live Monitor</title>
 
         <!-- Tailwind CSS -->
         <script src="https://cdn.tailwindcss.com"></script>
@@ -71,16 +71,9 @@
         >
             <div class="max-w-7xl mx-auto flex justify-between items-center">
                 <div class="flex items-center space-x-3">
-                    <div
-                        class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"
-                    >
-                        <i
-                            class="fa-solid fa-shield-halved text-white text-sm"
-                        ></i>
-                    </div>
+                    <img src="/logo.svg" alt="Logo" style="width: 10rem" />
                     <h1 class="text-xl font-bold tracking-tight text-white">
-                        Deepfake<span class="text-blue-500">Defense</span>
-                        Monitor
+                        Liveness<span class="text-blue-500">Detection</span>
                     </h1>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -110,39 +103,73 @@
             <div
                 class="relative z-20 bg-gray-900 rounded-xl border border-gray-800 p-5 shadow-sm"
             >
-                <div class="flex flex-col md:flex-row gap-4 items-end">
-                    <div class="flex-1 w-full">
+                <div
+                    class="grid grid-cols-1 lg:grid-cols-2 gap-6 divide-y lg:divide-y-0 lg:divide-x divide-gray-800"
+                >
+                    <!-- Live Meeting Control -->
+                    <div class="flex flex-col gap-3">
                         <label
-                            class="block text-xs font-medium text-gray-400 mb-1 uppercase tracking-wider"
-                            >Target Meeting URL</label
+                            class="block text-xs font-medium text-gray-400 uppercase tracking-wider"
                         >
-                        <div class="relative">
-                            <div
-                                class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
-                            >
-                                <i class="fa-solid fa-video text-gray-500"></i>
+                            Live Monitoring
+                        </label>
+                        <div class="flex gap-2">
+                            <div class="relative flex-1">
+                                <div
+                                    class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"
+                                >
+                                    <i
+                                        class="fa-solid fa-video text-gray-500"
+                                    ></i>
+                                </div>
+                                <input
+                                    type="text"
+                                    id="meetingUrl"
+                                    class="bg-gray-950 border border-gray-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5 placeholder-gray-600 transition-colors"
+                                    placeholder="https://meet.google.com/..."
+                                />
                             </div>
-                            <input
-                                type="text"
-                                id="meetingUrl"
-                                class="bg-gray-950 border border-gray-700 text-white text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-10 p-2.5 placeholder-gray-600 transition-colors"
-                                placeholder="https://meet.google.com/..."
-                                value=""
-                            />
+                            <button
+                                onclick="spawnBot()"
+                                id="spawnBtn"
+                                class="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm px-4 py-2.5 text-center inline-flex items-center transition-all shadow-lg shadow-blue-900/20 whitespace-nowrap"
+                            >
+                                <i class="fa-solid fa-robot mr-2"></i>
+                                Spawn
+                            </button>
                         </div>
-                    </div>
-                    <div class="w-full md:w-auto flex items-center gap-3">
-                        <button
-                            onclick="spawnBot()"
-                            id="spawnBtn"
-                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg text-sm px-5 py-2.5 text-center inline-flex items-center transition-all shadow-lg shadow-blue-900/20"
-                        >
-                            <i class="fa-solid fa-robot mr-2"></i>
-                            Spawn Bot
-                        </button>
                         <div
                             id="spawn-status"
-                            class="text-sm font-medium hidden"
+                            class="text-sm font-medium h-5"
+                        ></div>
+                    </div>
+
+                    <!-- File Upload Control -->
+                    <div class="flex flex-col gap-3 lg:pl-6">
+                        <label
+                            class="block text-xs font-medium text-gray-400 uppercase tracking-wider"
+                        >
+                            Analyze Recording
+                        </label>
+                        <div class="flex gap-2">
+                            <input
+                                type="file"
+                                id="videoUpload"
+                                accept="video/*"
+                                class="block w-full text-sm text-gray-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-gray-800 file:text-gray-300 hover:file:bg-gray-700 cursor-pointer bg-gray-950 border border-gray-700 rounded-lg"
+                            />
+                            <button
+                                onclick="uploadVideo()"
+                                id="uploadBtn"
+                                class="bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg text-sm px-4 py-2.5 text-center inline-flex items-center transition-all shadow-lg whitespace-nowrap"
+                            >
+                                <i class="fa-solid fa-upload mr-2"></i>
+                                Analyze
+                            </button>
+                        </div>
+                        <div
+                            id="upload-status"
+                            class="text-sm font-medium h-5"
                         ></div>
                     </div>
                 </div>
@@ -180,13 +207,13 @@
                         >
                             <div>
                                 <p class="text-sm text-gray-400 mb-1">
-                                    Latest Chunk Analysis
+                                    Cumulative Analysis
                                 </p>
                                 <h2
-                                    id="current-filename"
+                                    id="chunks-processed"
                                     class="text-xs font-mono text-gray-500"
                                 >
-                                    ...
+                                    Waiting for data...
                                 </h2>
                             </div>
                             <div
@@ -199,7 +226,7 @@
 
                         <!-- Metrics Grid -->
                         <div
-                            class="p-6 grid grid-cols-1 md:grid-cols-2 gap-8 overflow-y-auto"
+                            class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto"
                         >
                             <!-- Visual Analysis -->
                             <div class="space-y-4">
@@ -214,7 +241,7 @@
 
                                 <!-- Deepfake Prob -->
                                 <div
-                                    class="bg-gray-950 p-4 rounded-lg border border-gray-800"
+                                    class="bg-gray-950 p-4 rounded-lg border border-gray-800 h-full"
                                 >
                                     <div class="flex justify-between mb-1">
                                         <span class="text-sm text-gray-400"
@@ -237,15 +264,31 @@
                                     </div>
                                     <p
                                         id="visual-desc"
-                                        class="text-xs text-gray-500 mt-2"
+                                        class="text-xs text-gray-500 mt-4 leading-relaxed"
                                     >
-                                        Model: Effort (ICML 2025)
+                                        <i
+                                            class="fa-regular fa-lightbulb text-yellow-500 mr-1"
+                                        ></i>
+                                        Analyzes pixel-level artifacts and
+                                        temporal inconsistencies typically found
+                                        in AI-generated videos.
                                     </p>
                                 </div>
+                            </div>
 
-                                <!-- Liveness Metrics -->
+                            <!-- Liveness Metrics (Separated) -->
+                            <div class="space-y-4">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <i
+                                        class="fa-solid fa-user-check text-purple-400"
+                                    ></i>
+                                    <h3 class="font-semibold text-gray-200">
+                                        Biometric Liveness
+                                    </h3>
+                                </div>
+
                                 <div
-                                    class="bg-gray-950 p-4 rounded-lg border border-gray-800 space-y-4"
+                                    class="bg-gray-950 p-4 rounded-lg border border-gray-800 space-y-6 h-full"
                                 >
                                     <div>
                                         <div class="flex justify-between mb-1">
@@ -267,6 +310,12 @@
                                                 style="width: 0%"
                                             ></div>
                                         </div>
+                                        <p
+                                            class="text-[10px] text-gray-500 mt-1"
+                                        >
+                                            Analyzes eye aspect ratio (EAR)
+                                            variance over time.
+                                        </p>
                                     </div>
                                     <div>
                                         <div class="flex justify-between mb-1">
@@ -288,7 +337,23 @@
                                                 style="width: 0%"
                                             ></div>
                                         </div>
+                                        <p
+                                            class="text-[10px] text-gray-500 mt-1"
+                                        >
+                                            Tracks yaw/pitch/roll variance to
+                                            detect static heads.
+                                        </p>
                                     </div>
+
+                                    <p
+                                        class="text-xs text-gray-500 mt-4 leading-relaxed border-t border-gray-800 pt-3"
+                                    >
+                                        <i
+                                            class="fa-regular fa-lightbulb text-yellow-500 mr-1"
+                                        ></i>
+                                        Ensures the subject exhibits natural
+                                        physiological movements.
+                                    </p>
                                 </div>
                             </div>
 
@@ -336,7 +401,7 @@
                                         <!-- Threshold Marker (approx 7.0) -->
                                         <div
                                             class="absolute top-0 bottom-0 w-0.5 bg-red-500/50 z-10"
-                                            style="left: 46%"
+                                            style="left: 53%"
                                             title="Threshold"
                                         ></div>
                                         <div
@@ -346,7 +411,7 @@
                                         ></div>
                                     </div>
                                     <p class="text-xs text-gray-500 mt-2">
-                                        Lower distance is better. Threshold ~7.0
+                                        Lower distance is better. Threshold ~8.0
                                     </p>
                                 </div>
 
@@ -404,12 +469,32 @@
             const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
             let ws;
 
+            let cumulative = {
+                count: 0,
+                visualProb: 0,
+                blink: 0,
+                head: 0,
+                syncDist: 0,
+            };
+
+            function resetCumulative() {
+                cumulative = {
+                    count: 0,
+                    visualProb: 0,
+                    blink: 0,
+                    head: 0,
+                    syncDist: 0,
+                };
+                if (ui.chunksProcessed)
+                    ui.chunksProcessed.innerText = "Processed Chunks: 0";
+            }
+
             const ui = {
                 connStatus: document.getElementById("connection-status"),
                 latestCard: document.getElementById("latest-card"),
                 waitingOverlay: document.getElementById("waiting-overlay"),
                 mainVerdictBadge: document.getElementById("main-verdict-badge"),
-                filename: document.getElementById("current-filename"),
+                chunksProcessed: document.getElementById("chunks-processed"),
 
                 // Visual
                 visualScoreVal: document.getElementById("visual-score-val"),
@@ -463,6 +548,28 @@
             }
 
             function updateDashboard(data) {
+                // Update Cumulative Stats
+                cumulative.count++;
+
+                // Visual
+                const visual = data.details.visual_check || {};
+                cumulative.visualProb += visual.fake_probability || 0;
+
+                // Liveness
+                const live = data.details.liveness_check || {};
+                cumulative.blink += live.blink_score || 0;
+                cumulative.head += live.head_pose_score || 0;
+
+                // Audio
+                const audio = data.details.audio_check || {};
+                cumulative.syncDist += audio.average_distance || 0;
+
+                // Calculate Averages
+                const avgProb = cumulative.visualProb / cumulative.count;
+                const avgBlink = cumulative.blink / cumulative.count;
+                const avgHead = cumulative.head / cumulative.count;
+                const avgSyncDist = cumulative.syncDist / cumulative.count;
+
                 // Remove waiting overlay
                 ui.latestCard.classList.remove("opacity-50");
                 ui.waitingOverlay.classList.add("hidden");
@@ -474,21 +581,20 @@
                     ? "px-4 py-1.5 rounded-full text-lg font-bold tracking-wide border bg-red-900/30 border-red-600 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]"
                     : "px-4 py-1.5 rounded-full text-lg font-bold tracking-wide border bg-green-900/30 border-green-600 text-green-500 shadow-[0_0_15px_rgba(34,197,94,0.5)]";
 
-                ui.filename.innerText = data.chunk_path.split("/").pop();
+                if (ui.chunksProcessed)
+                    ui.chunksProcessed.innerText = `Processed Chunks: ${cumulative.count}`;
 
-                // 2. Visual Check
-                const visual = data.details.visual_check || {};
-                const prob = visual.fake_probability || 0;
-                const probPct = (prob * 100).toFixed(1);
+                // 2. Visual Check (Cumulative)
+                const probPct = (avgProb * 100).toFixed(1);
 
                 ui.visualScoreVal.innerText = `${probPct}%`;
                 ui.visualScoreBar.style.width = `${probPct}%`;
 
                 // Color scale for visual bar
-                if (prob < 0.3)
+                if (avgProb < 0.3)
                     ui.visualScoreBar.className =
                         "h-2.5 rounded-full meter-fill bg-green-500";
-                else if (prob < 0.6)
+                else if (avgProb < 0.6)
                     ui.visualScoreBar.className =
                         "h-2.5 rounded-full meter-fill bg-yellow-500";
                 else
@@ -496,47 +602,47 @@
                         "h-2.5 rounded-full meter-fill bg-red-600";
 
                 if (visual.error) {
-                    ui.visualDesc.innerText = `Error: ${visual.error}`;
-                    ui.visualDesc.className = "text-xs text-red-400 mt-2";
+                    ui.visualDesc.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> Error: ${visual.error}`;
+                    ui.visualDesc.className =
+                        "text-xs text-red-400 mt-4 leading-relaxed";
                 } else {
-                    ui.visualDesc.innerText = `Model: ${visual.model_used || "Standard"}`;
-                    ui.visualDesc.className = "text-xs text-gray-500 mt-2";
+                    // Keep the static tip defined in HTML
+                    ui.visualDesc.innerHTML = `<i class="fa-regular fa-lightbulb text-yellow-500 mr-1"></i> Analyzes pixel-level artifacts and temporal inconsistencies typically found in AI-generated videos.`;
+                    ui.visualDesc.className =
+                        "text-xs text-gray-500 mt-4 leading-relaxed";
                 }
 
-                // 3. Liveness Check
-                const live = data.details.liveness_check || {};
+                // 3. Liveness Check (Cumulative)
                 // Blink score is typically 0.0 - 0.5. Let's normalize loosely.
                 // 0.05 is "normal"ish in the logs.
-                ui.blinkVal.innerText = (live.blink_score || 0).toFixed(4);
+                ui.blinkVal.innerText = avgBlink.toFixed(4);
                 // Cap visual bar at 0.1 for display purposes
-                const blinkPct = Math.min((live.blink_score || 0) * 1000, 100);
+                const blinkPct = Math.min(avgBlink * 1000, 100);
                 ui.blinkBar.style.width = `${blinkPct}%`;
 
-                ui.headVal.innerText = (live.head_pose_score || 0).toFixed(2);
+                ui.headVal.innerText = avgHead.toFixed(2);
                 // Head pose varies 0 to 50+.
-                const headPct = Math.min((live.head_pose_score || 0) * 2, 100);
+                const headPct = Math.min(avgHead * 2, 100);
                 ui.headBar.style.width = `${headPct}%`;
 
-                // 4. Audio Sync
-                const audio = data.details.audio_check || {};
+                // 4. Audio Sync (Cumulative)
                 const isSyncGood = audio.is_sync_good !== false; // Default true unless explicit false
-                const distance = audio.average_distance || 0;
 
                 ui.syncBadge.innerText = isSyncGood ? "PASS" : "FAIL";
                 ui.syncBadge.className = isSyncGood
                     ? "px-2 py-0.5 rounded text-xs font-bold bg-green-900/50 text-green-400 border border-green-800"
                     : "px-2 py-0.5 rounded text-xs font-bold bg-red-900/50 text-red-400 border border-red-800";
 
-                ui.syncDistVal.innerText = distance.toFixed(2);
+                ui.syncDistVal.innerText = avgSyncDist.toFixed(2);
 
                 // Map distance 0-15 to 0-100%.
                 // However, higher distance is WORSE.
-                // Threshold is ~7. So 7 should be roughly 46% (left side is good).
-                const distPct = Math.min((distance / 15) * 100, 100);
+                // Threshold is ~8. So 8 should be roughly 53%.
+                const distPct = Math.min((avgSyncDist / 15) * 100, 100);
                 ui.syncDistBar.style.width = `${distPct}%`;
 
                 // Color based on Sync status or generic threshold
-                if (isSyncGood && distance < 7.5) {
+                if (avgSyncDist < 8.0) {
                     ui.syncDistBar.className =
                         "h-2.5 rounded-full meter-fill bg-green-500";
                 } else {
@@ -615,6 +721,8 @@
                 statusDiv.classList.remove("hidden");
                 statusDiv.innerText = "";
 
+                resetCumulative();
+
                 try {
                     const response = await fetch("/spawn", {
                         method: "POST",
@@ -639,6 +747,53 @@
                         btn.innerHTML =
                             '<i class="fa-solid fa-robot mr-2"></i> Spawn Bot';
                     }, 2000);
+                }
+            }
+
+            // --- File Upload ---
+            async function uploadVideo() {
+                const fileInput = document.getElementById("videoUpload");
+                const statusDiv = document.getElementById("upload-status");
+                const btn = document.getElementById("uploadBtn");
+                const file = fileInput.files[0];
+
+                if (!file) {
+                    alert("Please select a video file first.");
+                    return;
+                }
+
+                // UI Loading
+                btn.disabled = true;
+                btn.innerHTML =
+                    '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Analyzing...';
+                statusDiv.innerText = "";
+
+                resetCumulative();
+
+                const formData = new FormData();
+                formData.append("file", file);
+
+                try {
+                    const response = await fetch("/analyze-video", {
+                        method: "POST",
+                        body: formData,
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        updateDashboard(data);
+                        addToHistory(data);
+                        statusDiv.innerHTML = `<span class="text-green-400"><i class="fa-solid fa-check mr-1"></i> Analysis Complete</span>`;
+                    } else {
+                        statusDiv.innerHTML = `<span class="text-red-400">Analysis Failed</span>`;
+                    }
+                } catch (err) {
+                    console.error(err);
+                    statusDiv.innerHTML = `<span class="text-red-400">Network Error</span>`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML =
+                        '<i class="fa-solid fa-upload mr-2"></i> Analyze';
                 }
             }
 

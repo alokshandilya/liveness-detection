@@ -1,9 +1,11 @@
 import asyncio
 import json
 import logging
+import shutil
+import time
 from typing import List
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, BackgroundTasks
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 import httpx
 from logic.liveness import check_liveness
@@ -58,6 +60,10 @@ manager = ConnectionManager()
 async def get():
     with open(os.path.join(os.path.dirname(__file__), "monitor.html"), "r") as f:
         return f.read()
+
+@app.get("/logo.svg")
+async def get_logo():
+    return FileResponse(os.path.join(os.path.dirname(__file__), "logo.svg"), media_type="image/svg+xml")
 
 @app.post("/spawn")
 async def spawn_bot_endpoint(request: SpawnRequest):
@@ -132,14 +138,8 @@ async def call_service_c(file_path: str, client: httpx.AsyncClient):
         # So we set is_sync_good to True (Pass) or None and handle it in aggregation
         return {"status": "error", "is_sync_good": True, "average_distance": -1, "note": "Inconclusive"}
 
-@app.post("/process_chunk")
-async def process_chunk(request: ChunkRequest):
-    file_path = request.file_path
-    
-    if not os.path.exists(file_path):
-        return {"status": "error", "message": "File not found"}
-
-    logger.info(f"Processing chunk: {file_path}")
+async def run_analysis_pipeline(file_path: str):
+    logger.info(f"Processing video: {file_path}")
 
     async with httpx.AsyncClient() as client:
         # 1. Parallel External Calls
@@ -169,7 +169,7 @@ async def process_chunk(request: ChunkRequest):
         verdict = "FAKE"
         reasons.append(f"Visual Probability High ({visual_prob})")
 
-    if not is_sync_good:
+    if not is_sync_good and visual_prob >= 0.2:
         verdict = "FAKE"
         reasons.append("Audio Sync Failed")
 
@@ -187,9 +187,45 @@ async def process_chunk(request: ChunkRequest):
         },
         "reasons": reasons
     }
+    return final_response
+
+@app.post("/process_chunk")
+async def process_chunk(request: ChunkRequest):
+    file_path = request.file_path
+    
+    if not os.path.exists(file_path):
+        return {"status": "error", "message": "File not found"}
+
+    final_response = await run_analysis_pipeline(file_path)
 
     # 5. Broadcast
     await manager.broadcast(final_response)
 
     # 6. Return
     return final_response
+
+@app.post("/analyze-video")
+async def analyze_video(file: UploadFile):
+    """
+    Analyzes an uploaded video file using the liveness detection pipeline.
+    Returns the analysis results including Visual, Audio, and Liveness checks.
+    """
+    # Save uploaded file
+    temp_dir = "/tmp"
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+        
+    temp_filename = f"upload_{int(time.time())}_{file.filename}"
+    temp_path = os.path.join(temp_dir, temp_filename)
+    
+    try:
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+            
+        final_response = await run_analysis_pipeline(temp_path)
+        return final_response
+        
+    finally:
+        # Cleanup uploaded file after processing
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
